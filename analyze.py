@@ -14,7 +14,7 @@ def handle_any(header, expression, mbox):
     global stmt
     if header in ('To', 'Cc', 'From'):
         print stmt, \
-            'address :contains ["%s"]  "%s" {\n' \
+            'address :contains ["%s"] ["%s"] {\n' \
             '\tfileinto "%s";\n}' % (
                 header, expression, mbox)
     elif header == 'Subject':
@@ -28,11 +28,26 @@ def handle_any(header, expression, mbox):
 
 
 def handle_specific(criteria, mbox):
-    global stmt
+    matches = []
     print "elsif allof ("
+
     for criteria in rule['Criteria']:
-        print '\taddress :contains ["%s"]  "%s",' % (
-            'To', criteria['Expression'])
+        if 'Qualifier' in criteria:
+            if criteria['Header'] in ('To', 'Cc', 'From'):
+                matches.append('\tnot address :contains ["%s"]  "%s"' % (
+                    criteria['Header'], criteria['Expression']))
+            elif criteria['Header'] == 'Subject':
+                matches.append('\tnot header :matches "Subject" ["*%s*"]' % (
+                    criteria['Expression']))
+        else:
+            if criteria['Header'] in ('To', 'Cc', 'From'):
+                matches.append('\taddress :contains ["%s"]  "%s"' % (
+                    criteria['Header'], criteria['Expression']))
+            elif criteria['Header'] == 'Subject':
+                matches.append('\theader :matches "Subject" ["*%s*"]' % (
+                    criteria['Expression']))
+
+    print ",\n".join(matches)
     print ') {\n\tfileinto "%s"\n}' % (mbox)
 
 
@@ -45,8 +60,8 @@ for rule in p:
         continue
     mbox = unquote(
         urlparse(rule['MailboxURL']).path).decode('utf8').strip('/')
-    print "\n#", rule['RuleName'], '\n#  ->', mbox
-    print "#  ", rule['AllCriteriaMustBeSatisfied']
+    print "\n# \"", rule['RuleName'], '\"\n#  ->', \
+        mbox, rule['AllCriteriaMustBeSatisfied']
     if rule['AllCriteriaMustBeSatisfied'] is False:
         for criteria in rule['Criteria']:
             if 'AnyMessage' in criteria['Header']:
@@ -62,6 +77,6 @@ for rule in p:
     elif rule['AllCriteriaMustBeSatisfied'] is True:
         handle_specific(rule['Criteria'], mbox)
 
-print "else {\nkeep;\n}"
+print "else {\n\tkeep;\n}"
 
 # print j, len(p)
